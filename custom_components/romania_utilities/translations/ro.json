@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Alege furnizorul",
+        "menu_options": {
+          "eon": "E·ON România (Myline)",
+          "hidroelectrica": "Hidroelectrica (iHidro)"
+        }
+      },
+      "eon": {
+        "title": "Autentificare E·ON Myline",
+        "description": "Folosește același e-mail și aceeași parolă ca pe eon.ro/myline.",
+        "data": { "username": "E-mail", "password": "Parolă" }
+      },
+      "hidroelectrica": {
+        "title": "Autentificare iHidro",
+        "description": "Folosește același utilizator și aceeași parolă ca pe ihidro.ro.",
+        "data": { "username": "Utilizator", "password": "Parolă" }
+      },
+      "mfa": {
+        "title": "Cod de verificare",
+        "description": "E·ON a trimis un cod de verificare la {recipient}. Introdu-l mai jos.",
+        "data": { "code": "Cod" }
+      },
+      "contracts": {
+        "title": "Contracte",
+        "description": "Alege contractele de adăugat în Home Assistant.",
+        "data": { "contracts": "Contracte" }
+      },
+      "reauth_confirm": {
+        "title": "Autentificare din nou",
+        "description": "{provider} a respins autentificarea salvată pentru {username}. Introdu din nou parola.",
+        "data": { "password": "Parolă" }
+      }
+    },
+    "error": {
+      "invalid_auth": "Utilizator sau parolă greșite.",
+      "invalid_code": "Codul a fost respins sau a expirat.",
+      "cannot_connect": "Furnizorul nu poate fi contactat. Încearcă mai târziu."
+    },
+    "abort": {
+      "already_configured": "Acest cont este deja configurat.",
+      "reauth_successful": "Autentificare reușită.",
+      "no_contracts": "Nu s-a găsit niciun contract în acest cont.",
+      "cannot_connect": "Furnizorul nu poate fi contactat. Încearcă mai târziu."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance": { "name": "Sold de plată" },
+      "last_invoice_amount": { "name": "Valoare ultima factură" },
+      "last_invoice_issue_date": { "name": "Data emiterii ultimei facturi" },
+      "last_invoice_due_date": { "name": "Scadența ultimei facturi" },
+      "next_due_date": { "name": "Următoarea scadență" },
+      "days_until_due": { "name": "Zile până la scadență" },
+      "unpaid_invoices": { "name": "Facturi neachitate" },
+      "consumption_last_month": { "name": "Consum luna trecută" },
+      "consumption_ytd": { "name": "Consum anul acesta" },
+      "reading_window_start": { "name": "Început perioadă citire" },
+      "reading_window_end": { "name": "Sfârșit perioadă citire" },
+      "last_index": { "name": "Ultimul index" },
+      "injected_index": { "name": "Index energie injectată" },
+      "prosumer_balance": { "name": "Sold prosumator" },
+      "compensation_ytd": { "name": "Compensări anul acesta" }
+    },
+    "binary_sensor": {
+      "reading_window_open": { "name": "Perioadă de citire deschisă" },
+      "invoice_overdue": { "name": "Factură restantă" }
+    }
+  }
+}

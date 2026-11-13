@@ -1,0 +1,14 @@
+{
+  "domain": "romania_utilities",
+  "name": "Romania Utilities (E·ON, Hidroelectrica)",
+  "codeowners": ["@randomdad156"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/randomdad156/ha-romania-utilities",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/randomdad156/ha-romania-utilities/issues",
+  "loggers": ["custom_components.romania_utilities"],
+  "requirements": [],
+  "version": "0.1.0"
+}
