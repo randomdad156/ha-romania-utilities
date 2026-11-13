@@ -15,10 +15,18 @@ CONF_MFA_CODE: Final = "code"
 
 PROVIDER_EON: Final = "eon"
 PROVIDER_HIDRO: Final = "hidroelectrica"
+PROVIDER_EBLOC: Final = "ebloc"
 
 PROVIDER_NAMES: Final = {
     PROVIDER_EON: "E·ON România",
     PROVIDER_HIDRO: "Hidroelectrica",
+    PROVIDER_EBLOC: "e-bloc",
+}
+
+PROVIDER_URLS: Final = {
+    PROVIDER_EON: "https://www.eon.ro/myline",
+    PROVIDER_HIDRO: "https://ihidro.ro/portal/",
+    PROVIDER_EBLOC: "https://www.e-bloc.ro/",
 }
 
 UPDATE_INTERVAL: Final = timedelta(hours=6)

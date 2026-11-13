@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, PROVIDER_EON, PROVIDER_NAMES
+from .const import DOMAIN, PROVIDER_EON, PROVIDER_NAMES, PROVIDER_URLS
 from .coordinator import UtilitiesCoordinator
 from .parsers import EON_UTILITY_TYPES
 
@@ -36,8 +36,7 @@ class UtilitiesEntity(CoordinatorEntity[UtilitiesCoordinator]):
             model=contract.get("product") or kind or "Contract",
             serial_number=self.contract_id,
             entry_type=DeviceEntryType.SERVICE,
-            configuration_url="https://www.eon.ro/myline" if coordinator.provider == PROVIDER_EON
-            else "https://ihidro.ro/portal/",
+            configuration_url=PROVIDER_URLS[coordinator.provider],
         )
 
     @property

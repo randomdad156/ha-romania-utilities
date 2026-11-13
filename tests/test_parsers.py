@@ -237,3 +237,61 @@ def test_hidro_last_invoice_from_history_when_paid():
     assert out["last_invoice_number"] == "B"
     assert out["last_invoice_paid"] is True
     assert out["unpaid_invoices"] == 0
+
+
+# ── e-bloc ──
+
+EBLOC_RAW = {
+    "info": {"1": {"datorie": "18755", "luna_afisata": "2026-10", "ultima_zi_plata": "2026-11-27",
+                   "citire_contoare_start": "2026-11-01", "citire_contoare_end": "2026-11-04",
+                   "contoare_citite": "1", "nr_pers_afisat": "2"}},
+    "months": {"1": {"status": "ok", "luna": "2026-10", "citiri_contoare_inceput": "2026-11-01",
+                     "citiri_contoare_sfarsit": "2026-11-04", "open": "1"}},
+    "stat": {"0": {"status": "ok"},
+             "1": {"luna": "2026-10", "suma": "4055", "coloana": "Apă rece"},
+             "2": {"luna": "2026-10", "suma": "14700", "coloana": "Fond de reparaţii"},
+             "3": {"luna": "2026-09", "suma": "9999", "coloana": "Apă rece"}},
+    "meters": {"1": {"status": "ok", "id_contor": "0", "index_vechi": "0", "index_nou": "0"},
+               "2": {"status": "ok", "id_contor": "900", "titlu": "AR 1", "index_vechi": "1234000",
+                     "index_nou": "1234204", "data": "2026-11-03"}},
+}
+
+
+def test_ebloc_apartment_normalised():
+    out = p.parse_ebloc_apartment(EBLOC_RAW, TODAY)
+    assert set(out) == set(p.NORMALISED_KEYS)
+    assert out["balance"] == 187.55
+    assert out["maintenance_total"] == 187.55
+    assert out["last_invoice_amount"] == 187.55
+    assert out["list_month"] == date(2026, 10, 1)
+    assert out["last_invoice_number"] == "2026-10"
+    assert out["last_invoice_due_date"] == date(2026, 11, 27)
+    assert out["unpaid_invoices"] == 1
+    assert out["days_until_due"] == 14
+    # 1–4 Nov has passed on 13 Nov: next window is projected to 1–4 Dec.
+    assert out["reading_window_start"] == date(2026, 12, 1)
+    assert out["reading_window_end"] == date(2026, 12, 4)
+    assert out["reading_window_open"] is False
+    assert out["index_submitted"] is True
+    assert out["meters"] == [{"id": "900", "title": "AR 1", "index": 1234.204,
+                              "consumption": 0.204, "reading_date": date(2026, 11, 3)}]
+    assert out["last_index"] == 1234.204
+    assert out["consumption_last_month"] == 0.204
+    assert out["consumption_unit"] == "m³"
+
+
+def test_ebloc_paid_and_open_window():
+    raw = {**EBLOC_RAW, "info": {"1": {**EBLOC_RAW["info"]["1"], "datorie": "0",
+                                       "citire_contoare_start": "2026-11-12",
+                                       "citire_contoare_end": "2026-11-15"}}}
+    out = p.parse_ebloc_apartment(raw, TODAY)
+    assert out["balance"] == 0
+    assert out["unpaid_invoices"] == 0
+    assert out["days_until_due"] is None
+    assert out["reading_window_open"] is True
+
+
+def test_ebloc_contract_options():
+    opts = p.ebloc_contract_options([{"asoc": "11", "id_ap": "7", "titlu": "Ap. 3", "asoc_name": "Bloc A"}])
+    assert opts["11_7"]["name"] == "e-bloc Ap. 3"
+    assert opts["11_7"]["label"] == "Bloc A · Ap. 3"

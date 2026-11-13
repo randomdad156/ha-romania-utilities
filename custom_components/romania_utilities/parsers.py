@@ -55,6 +55,11 @@ NORMALISED_KEYS = (
     "injected_index",
     "prosumer_balance",
     "compensation_ytd",
+    # e-bloc (maintenance fees)
+    "list_month",
+    "maintenance_total",
+    "index_submitted",
+    "meters",
 )
 
 
@@ -574,4 +579,123 @@ def parse_hidro_account(raw: dict[str, Any], today: date) -> dict[str, Any]:
     injected = hidro_readings(raw.get("history"), REG_INJECTED)
     if injected:
         out["injected_index"] = injected[-1][1]
+    return out
+
+
+# ── e-bloc ───────────────────────────────────────────────────────────────────
+
+
+def _ebloc_rows(reply: Any) -> list[dict]:
+    if not isinstance(reply, dict):
+        return []
+    keys = sorted((k for k in reply if str(k).isdigit()), key=int)
+    return [reply[k] for k in keys if isinstance(reply[k], dict)]
+
+
+def _bani(value: Any) -> float | None:
+    """e-bloc amounts are integers in bani (1/100 lei)."""
+    number = to_float(value)
+    return round(number / 100, 2) if number is not None else None
+
+
+def _month_date(value: Any) -> date | None:
+    """'2026-09' -> 2026-09-01."""
+    return to_date(f"{value}-01") if isinstance(value, str) and len(value) == 7 else None
+
+
+def ebloc_contract_options(apartments: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
+    """Selectable apartments: '<asoc>_<id_ap>' -> stored contract dict (+ ``label``)."""
+    options: dict[str, dict[str, Any]] = {}
+    for apt in apartments:
+        key = f"{apt['asoc']}_{apt['id_ap']}"
+        title = apt.get("titlu") or f"Ap. {apt['id_ap']}"
+        options[key] = {
+            "id": key,
+            "asoc": apt["asoc"],
+            "id_ap": apt["id_ap"],
+            "name": f"e-bloc {title}",
+            "kind": "Maintenance",
+            "label": " · ".join(p for p in (apt.get("asoc_name"), title) if p),
+        }
+    return options
+
+
+def parse_ebloc_apartment(raw: dict[str, Any], today: date) -> dict[str, Any]:
+    """Normalise one e-bloc apartment.
+
+    ``raw`` keys: info (AjaxGetHomeApInfo), months (AjaxGetIndexLuni),
+    stat (AjaxGetHomeStat), meters (AjaxGetIndexContoare). Any may be None.
+    """
+    out = empty_contract()
+    out["consumption_unit"] = "m³"
+    info = next(iter(_ebloc_rows(raw.get("info"))), {})
+
+    out["balance"] = _bani(info.get("datorie"))
+    list_month = info.get("luna_afisata") or None
+    out["list_month"] = _month_date(list_month)
+    out["last_invoice_number"] = list_month  # the payment list plays the invoice's role
+    due = to_date(info.get("ultima_zi_plata"))
+    out["last_invoice_due_date"] = due
+
+    # Maintenance total of the displayed list = sum of its itemised columns.
+    total = 0
+    found = False
+    for row in _ebloc_rows(raw.get("stat")):
+        if list_month and row.get("luna") == list_month:
+            amount = to_float(row.get("suma"))
+            if amount is not None:
+                total += amount
+                found = True
+    if found:
+        out["maintenance_total"] = round(total / 100, 2)
+        out["last_invoice_amount"] = out["maintenance_total"]
+
+    if out["balance"] is not None:
+        unpaid = out["balance"] > 0.009
+        out["unpaid_invoices"] = 1 if unpaid else 0
+        out["last_invoice_paid"] = not unpaid
+        if unpaid:
+            out["next_due_date"] = due
+    out["days_until_due"] = days_between(today, out["next_due_date"])
+
+    # Meter-reading window: the current one from the apartment info, or the
+    # most recent month's window, rolled one month ahead once it has passed.
+    start = to_date(info.get("citire_contoare_start"))
+    end = to_date(info.get("citire_contoare_end"))
+    months = _ebloc_rows(raw.get("months"))
+    if (start is None or end is None) and months:
+        start = to_date(months[0].get("citiri_contoare_inceput"))
+        end = to_date(months[0].get("citiri_contoare_sfarsit"))
+    if start and end and end < today:
+        start, end = _next_month(start), _next_month(end)
+    out["reading_window_start"] = start
+    out["reading_window_end"] = end
+    if start and end:
+        out["reading_window_open"] = start <= today <= end
+    if info.get("contoare_citite") not in (None, ""):
+        out["index_submitted"] = str(info.get("contoare_citite")) == "1"
+
+    # Individual meters (indexes in thousandths of a m³).
+    meters: list[dict[str, Any]] = []
+    for row in _ebloc_rows(raw.get("meters")):
+        if str(row.get("id_contor") or "0") == "0":
+            continue
+        new, old = to_float(row.get("index_nou")), to_float(row.get("index_vechi"))
+        meters.append(
+            {
+                "id": str(row["id_contor"]),
+                "title": str(row.get("titlu") or f"Meter {row['id_contor']}"),
+                "index": round(new / 1000, 3) if new is not None else None,
+                "consumption": round((new - old) / 1000, 3)
+                if new is not None and old is not None and new >= old else None,
+                "reading_date": to_date(row.get("data")),
+            }
+        )
+    out["meters"] = meters
+    if meters:
+        out["last_index"] = meters[0]["index"]
+        out["last_index_date"] = meters[0]["reading_date"]
+        values = [m["consumption"] for m in meters if m["consumption"] is not None]
+        if values:
+            out["consumption_last_month"] = round(sum(values), 3)
     return out

@@ -5,7 +5,8 @@
         "title": "Alege furnizorul",
         "menu_options": {
           "eon": "E·ON România (Myline)",
-          "hidroelectrica": "Hidroelectrica (iHidro)"
+          "hidroelectrica": "Hidroelectrica (iHidro)",
+          "ebloc": "e-bloc.ro (întreținere)"
         }
       },
       "eon": {
@@ -19,6 +20,14 @@
       "hidroelectrica": {
         "title": "Autentificare iHidro",
         "description": "Folosește același utilizator și aceeași parolă ca pe ihidro.ro.",
+        "data": {
+          "username": "Utilizator",
+          "password": "Parolă"
+        }
+      },
+      "ebloc": {
+        "title": "Autentificare e-bloc",
+        "description": "Folosește același utilizator (sau e-mail) și aceeași parolă ca pe e-bloc.ro.",
         "data": {
           "username": "Utilizator",
           "password": "Parolă"
@@ -118,6 +127,21 @@
       },
       "compensation_ytd": {
         "name": "Compensări anul acesta"
+      },
+      "maintenance_total": {
+        "name": "Total listă întreținere"
+      },
+      "list_month": {
+        "name": "Luna listei de întreținere"
+      },
+      "payment_due_date": {
+        "name": "Termen de plată"
+      },
+      "meter_index": {
+        "name": "Index {meter}"
+      },
+      "meter_consumption": {
+        "name": "Consum {meter} luna trecută"
       }
     },
     "binary_sensor": {
@@ -126,6 +150,9 @@
       },
       "invoice_overdue": {
         "name": "Factură restantă"
+      },
+      "index_submitted": {
+        "name": "Index apă transmis"
       }
     }
   }

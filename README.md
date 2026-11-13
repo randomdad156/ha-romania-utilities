@@ -1,8 +1,9 @@
 # Romania Utilities for Home Assistant
 
 Bills, consumption and meter-reading data from **E·ON România** (gas and
-electricity, Myline) and **Hidroelectrica** (electricity, iHidro), as Home
-Assistant sensors.
+electricity, Myline), **Hidroelectrica** (electricity, iHidro) and **e-bloc.ro**
+(owners' association maintenance fees and water meters), as Home Assistant
+sensors.
 
 Unofficial and not affiliated with either provider. It uses the same private
 APIs as the providers' own web and mobile apps, so a provider change can break
@@ -38,6 +39,11 @@ that would send you unwanted codes).
 | Last meter index | total-increasing, usable in the Energy dashboard |
 | Injected energy index, prosumer balance, compensations | only for prosumers |
 
+**e-bloc** apartments get: balance due, maintenance list total and month,
+payment due date / days until due, meter reading window (start, end, open),
+"water index submitted", and per water meter its index and last month's
+consumption (m³). The integration only reads; it never submits indexes.
+
 Updates every 6 hours.
 
 ## Events
@@ -55,6 +61,8 @@ login, just before Home Assistant starts the re-authentication flow. Data:
 * **Hidroelectrica** – the iHidro mobile app API (two-step login, then
   bill, billing history, reading window and index history). The iHidro web
   login requires a captcha, so it is not used.
+* **e-bloc** – the site's own login form (no captcha) and the JSON
+  `ajax/*.php` endpoints its pages use.
 
 Thanks to the MIT-licensed community projects
 [HAForgeLabs/utilitati_romania](https://github.com/HAForgeLabs/utilitati_romania) and

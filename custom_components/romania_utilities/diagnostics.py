@@ -45,6 +45,8 @@ TO_REDACT = {
     "bp_number",
     "BpNumber",
     "partnerCode",
+    "cod_client",
+    "asoc_name",
     "fiscalNumber",
     "phoneNumber",
     "mailingAddress",

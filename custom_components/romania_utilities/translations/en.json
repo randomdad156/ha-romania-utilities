@@ -5,7 +5,8 @@
         "title": "Choose provider",
         "menu_options": {
           "eon": "E·ON România (Myline)",
-          "hidroelectrica": "Hidroelectrica (iHidro)"
+          "hidroelectrica": "Hidroelectrica (iHidro)",
+          "ebloc": "e-bloc.ro (maintenance fees)"
         }
       },
       "eon": {
@@ -19,6 +20,14 @@
       "hidroelectrica": {
         "title": "iHidro login",
         "description": "Use the same user name and password as on ihidro.ro.",
+        "data": {
+          "username": "User name",
+          "password": "Password"
+        }
+      },
+      "ebloc": {
+        "title": "e-bloc login",
+        "description": "Use the same user name (or e-mail) and password as on e-bloc.ro.",
         "data": {
           "username": "User name",
           "password": "Password"
@@ -118,6 +127,21 @@
       },
       "compensation_ytd": {
         "name": "Compensations this year"
+      },
+      "maintenance_total": {
+        "name": "Maintenance list total"
+      },
+      "list_month": {
+        "name": "Maintenance list month"
+      },
+      "payment_due_date": {
+        "name": "Payment due date"
+      },
+      "meter_index": {
+        "name": "{meter} index"
+      },
+      "meter_consumption": {
+        "name": "{meter} consumption last month"
       }
     },
     "binary_sensor": {
@@ -126,6 +150,9 @@
       },
       "invoice_overdue": {
         "name": "Invoice overdue"
+      },
+      "index_submitted": {
+        "name": "Water index submitted"
       }
     }
   }

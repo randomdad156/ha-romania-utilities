@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import UtilitiesConfigEntry
+from .const import PROVIDER_EBLOC
 from .entity import UtilitiesEntity
 
 
@@ -18,7 +19,17 @@ async def async_setup_entry(
     for contract in coordinator.contracts:
         entities.append(ReadingWindowOpen(coordinator, contract, "reading_window_open"))
         entities.append(InvoiceOverdue(coordinator, contract, "invoice_overdue"))
+        if coordinator.provider == PROVIDER_EBLOC:
+            entities.append(IndexSubmitted(coordinator, contract, "index_submitted"))
     async_add_entities(entities)
+
+
+class IndexSubmitted(UtilitiesEntity, BinarySensorEntity):
+    """e-bloc: the water index for the current month has been submitted."""
+
+    @property
+    def is_on(self) -> bool | None:
+        return self.values.get("index_submitted")
 
 
 class ReadingWindowOpen(UtilitiesEntity, BinarySensorEntity):

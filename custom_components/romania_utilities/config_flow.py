@@ -7,11 +7,15 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
+from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
@@ -29,13 +33,15 @@ from .const import (
     CONF_PROVIDER,
     CONF_TOKENS,
     DOMAIN,
+    PROVIDER_EBLOC,
     PROVIDER_EON,
     PROVIDER_HIDRO,
     PROVIDER_NAMES,
 )
+from .ebloc_api import EblocAuthError, EblocClient, EblocError
 from .eon_api import EonAuthError, EonClient, EonError, EonMfaRequired
 from .hidro_api import HidroAuthError, HidroClient, HidroError
-from .parsers import eon_contract_options, hidro_contract_options
+from .parsers import ebloc_contract_options, eon_contract_options, hidro_contract_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +71,9 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
     # ── provider + credentials ──
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="user", menu_options=[PROVIDER_EON, PROVIDER_HIDRO])
+        return self.async_show_menu(
+            step_id="user", menu_options=[PROVIDER_EON, PROVIDER_HIDRO, PROVIDER_EBLOC]
+        )
 
     async def async_step_eon(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         self._provider = PROVIDER_EON
@@ -76,6 +84,10 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         self._provider = PROVIDER_HIDRO
         return await self._credentials_step(PROVIDER_HIDRO, user_input)
+
+    async def async_step_ebloc(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        self._provider = PROVIDER_EBLOC
+        return await self._credentials_step(PROVIDER_EBLOC, user_input)
 
     async def _credentials_step(
         self, step_id: str, user_input: dict[str, Any] | None
@@ -113,13 +125,22 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._mfa_required = True
                     return await self.async_step_mfa()
                 return await self._after_login()
+            if self._provider == PROVIDER_EBLOC:
+                ebloc = EblocClient(
+                    async_create_clientsession(self.hass, cookie_jar=CookieJar()),
+                    self._username,
+                    self._password,
+                )
+                await ebloc.login()
+                self._available = ebloc_contract_options(await ebloc.get_apartments())
+                return await self._after_contracts_known()
             client = HidroClient(session, self._username, self._password)
             await client.login()
             self._available = hidro_contract_options(await client.get_user_setting())
             return await self._after_contracts_known()
-        except (EonAuthError, HidroAuthError):
+        except (EonAuthError, HidroAuthError, EblocAuthError):
             errors["base"] = "invalid_auth"
-        except (EonError, HidroError) as err:
+        except (EonError, HidroError, EblocError) as err:
             _LOGGER.warning("Login to %s failed: %s", self._provider, err)
             errors["base"] = "cannot_connect"
         return None
@@ -275,9 +296,11 @@ class ContractsOptionsFlow(OptionsFlow):
                 self._available = eon_contract_options(
                     await coordinator.client.get_contracts(allow_login=allow_login)
                 )
+            elif entry.data[CONF_PROVIDER] == PROVIDER_EBLOC:
+                self._available = ebloc_contract_options(await coordinator.client.get_apartments())
             else:
                 self._available = hidro_contract_options(await coordinator.client.get_user_setting())
-        except (EonError, HidroError) as err:
+        except (EonError, HidroError, EblocError) as err:
             _LOGGER.warning("Could not list contracts: %s", err)
             return self.async_abort(reason="cannot_connect")
         for contract in entry.data.get(CONF_CONTRACTS, []):

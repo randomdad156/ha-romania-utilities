@@ -5,11 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -20,12 +24,14 @@ from .const import (
     CONF_TOKENS,
     DOMAIN,
     EVENT_AUTH_FAILED,
+    PROVIDER_EBLOC,
     PROVIDER_EON,
     UPDATE_INTERVAL,
 )
+from .ebloc_api import EblocAuthError, EblocClient, EblocError
 from .eon_api import EonAuthError, EonClient, EonError
 from .hidro_api import HidroAuthError, HidroClient, HidroError
-from .parsers import parse_eon_contract, parse_hidro_account
+from .parsers import parse_ebloc_apartment, parse_eon_contract, parse_hidro_account
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,11 +52,18 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.data[CONF_PROVIDER]
         session = async_get_clientsession(hass)
         if self.provider == PROVIDER_EON:
-            self.client: EonClient | HidroClient = EonClient(
+            self.client: EonClient | HidroClient | EblocClient = EonClient(
                 session,
                 entry.data[CONF_USERNAME],
                 entry.data[CONF_PASSWORD],
                 entry.data.get(CONF_TOKENS),
+            )
+        elif self.provider == PROVIDER_EBLOC:
+            # e-bloc keeps a PHP session cookie, so it needs a private cookie jar.
+            self.client = EblocClient(
+                async_create_clientsession(hass, cookie_jar=CookieJar()),
+                entry.data[CONF_USERNAME],
+                entry.data[CONF_PASSWORD],
             )
         else:
             self.client = HidroClient(
@@ -64,9 +77,11 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             if self.provider == PROVIDER_EON:
                 data = await self._update_eon(today)
+            elif self.provider == PROVIDER_EBLOC:
+                data = await self._update_ebloc(today)
             else:
                 data = await self._update_hidro(today)
-        except (EonAuthError, HidroAuthError) as err:
+        except (EonAuthError, HidroAuthError, EblocAuthError) as err:
             self.hass.bus.async_fire(
                 EVENT_AUTH_FAILED,
                 {
@@ -77,7 +92,7 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 },
             )
             raise ConfigEntryAuthFailed(str(err)) from err
-        except (EonError, HidroError) as err:
+        except (EonError, HidroError, EblocError) as err:
             raise UpdateFailed(str(err)) from err
         return data
 
@@ -99,6 +114,15 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raw = await client.fetch_account(contract)
             self.raw[contract["id"]] = raw
             data[contract["id"]] = parse_hidro_account(raw, today)
+        return data
+
+    async def _update_ebloc(self, today: Any) -> dict[str, Any]:
+        client: EblocClient = self.client  # type: ignore[assignment]
+        data: dict[str, Any] = {}
+        for contract in self.contracts:
+            raw = await client.fetch_apartment(contract["asoc"], contract["id_ap"])
+            self.raw[contract["id"]] = raw
+            data[contract["id"]] = parse_ebloc_apartment(raw, today)
         return data
 
     def _persist_tokens(self, tokens: dict[str, Any]) -> None:
