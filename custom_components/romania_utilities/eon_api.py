@@ -40,7 +40,7 @@ URL_GRAPHIC = f"{API_BASE}/invoices/v1/invoices/graphic-consumption/{{contract}}
 URL_METER_INDEX = f"{API_BASE}/meterreadings/v1/meter-reading/{{contract}}/index"
 
 MFA_REQUIRED_CODE = "6054"
-REFRESH_MARGIN = 300  # refresh 5 minutes before expiry
+REFRESH_MARGIN = 900  # refresh 15 minutes before expiry (keep-alive runs every 5)
 DEFAULT_LIFETIME = 1800
 
 HEADERS = {
@@ -164,17 +164,34 @@ class EonClient:
             raise EonAuthError(f"Two-factor code rejected (HTTP {status})")
         raise EonError(f"Two-factor login failed (HTTP {status})")
 
+    @property
+    def seconds_left(self) -> float:
+        """Seconds until the access token expires (negative once expired)."""
+        return self._expires_at - time.time() if self._access else -1.0
+
     async def refresh(self) -> None:
-        """Renew the session. The web flow sends the current token, no auth header."""
-        if not self._access:
+        """Renew the session (no Authorization header).
+
+        The web flow sends the current access token, which only works while it
+        is still valid; the refresh token is tried as a fallback.
+        """
+        attempts = []
+        if self._access:
+            attempts.append({"token": self._access})
+        if self._refresh:
+            attempts.append({"refreshToken": self._refresh})
+        if not attempts:
             raise EonAuthError("No session to refresh")
-        status, data = await self._post_json(URL_REFRESH, {"token": self._access})
-        if status == 200 and isinstance(data, dict):
-            self._apply(data)
-            return
-        if status in (400, 401, 403):
-            raise EonAuthError(f"Session refresh rejected (HTTP {status})")
-        raise EonError(f"Session refresh failed (HTTP {status})")
+        last_status = 0
+        for payload in attempts:
+            status, data = await self._post_json(URL_REFRESH, payload)
+            if status == 200 and isinstance(data, dict):
+                self._apply(data)
+                return
+            if status not in (400, 401, 403):
+                raise EonError(f"Session refresh failed (HTTP {status})")
+            last_status = status
+        raise EonAuthError(f"Session refresh rejected (HTTP {last_status})")
 
     async def ensure_session(self, allow_login: bool) -> None:
         """Make sure a usable access token exists.

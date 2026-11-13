@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from aiohttp import CookieJar
@@ -29,11 +30,14 @@ from .const import (
     UPDATE_INTERVAL,
 )
 from .ebloc_api import EblocAuthError, EblocClient, EblocError
-from .eon_api import EonAuthError, EonClient, EonError
+from .eon_api import REFRESH_MARGIN, EonAuthError, EonClient, EonError
 from .hidro_api import HidroAuthError, HidroClient, HidroError
 from .parsers import parse_ebloc_apartment, parse_eon_contract, parse_hidro_account
 
 _LOGGER = logging.getLogger(__name__)
+
+KEEPALIVE_INTERVAL = timedelta(minutes=5)
+KEEPALIVE_MARGIN = REFRESH_MARGIN  # renew when under 15 minutes are left
 
 
 class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -131,3 +135,37 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data={**self.config_entry.data, CONF_TOKENS: tokens}
             )
+
+    async def async_keepalive(self, _now: Any = None) -> None:
+        """E·ON only: renew the session before the access token expires.
+
+        Access tokens last well under an hour while data is polled every 6
+        hours, so without this the token would always be expired by the next
+        poll and a 2FA account would need a new code every time.
+        """
+        if self.provider != PROVIDER_EON:
+            return
+        client: EonClient = self.client  # type: ignore[assignment]
+        if client.seconds_left > KEEPALIVE_MARGIN:
+            return
+        try:
+            await client.ensure_session(
+                allow_login=not self.config_entry.data.get(CONF_MFA_REQUIRED, False)
+            )
+        except EonAuthError as err:
+            _LOGGER.warning("E·ON session could not be renewed: %s", err)
+            self.hass.bus.async_fire(
+                EVENT_AUTH_FAILED,
+                {
+                    "entry_id": self.config_entry.entry_id,
+                    "provider": self.provider,
+                    "title": self.config_entry.title,
+                    "reason": str(err),
+                },
+            )
+            self.config_entry.async_start_reauth(self.hass)
+            return
+        except EonError as err:
+            _LOGGER.debug("E·ON keep-alive failed, will retry: %s", err)
+            return
+        self._persist_tokens(client.tokens)
