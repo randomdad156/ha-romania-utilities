@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Romania Utilities</title>
+  <defs>
+    <clipPath id="bar"><rect x="166" y="440" width="180" height="26" rx="13"/></clipPath>
+  </defs>
+
+  <!-- tile -->
+  <rect x="0" y="0" width="512" height="512" rx="108" fill="#26303f"/>
+
+  <!-- electricity: bolt -->
+  <path d="M182 52 L98 170 L152 170 L128 250 L214 124 L160 124 Z" fill="#ffc928"/>
+
+  <!-- water: drop -->
+  <path d="M362 58 C362 58 296 138 296 184 A66 66 0 0 0 428 184 C428 138 362 58 362 58 Z" fill="#9fd4f0"/>
+  <path d="M332 182 A32 32 0 0 0 352 214" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- gas: flame -->
+  <path d="M152 262 C190 302 216 330 216 368 A66 66 0 0 1 84 368 C84 336 104 314 118 292 C122 314 132 324 146 330 C138 304 140 282 152 262 Z" fill="#3d8bfd"/>
+  <path d="M150 330 C170 352 180 366 180 382 A30 30 0 0 1 120 382 C120 366 132 352 150 330 Z" fill="#ff7a1a"/>
+
+  <!-- association: building -->
+  <rect x="310" y="262" width="104" height="150" rx="10" fill="#d4e6f6"/>
+  <g fill="#26303f">
+    <rect x="322" y="278" width="20" height="20" rx="3"/>
+    <rect x="352" y="278" width="20" height="20" rx="3"/>
+    <rect x="382" y="278" width="20" height="20" rx="3"/>
+    <rect x="322" y="310" width="20" height="20" rx="3"/>
+    <rect x="352" y="310" width="20" height="20" rx="3"/>
+    <rect x="382" y="310" width="20" height="20" rx="3"/>
+    <rect x="322" y="342" width="20" height="20" rx="3"/>
+    <rect x="382" y="342" width="20" height="20" rx="3"/>
+    <rect x="350" y="370" width="24" height="42" rx="3"/>
+  </g>
+
+  <!-- Romanian tricolour -->
+  <g clip-path="url(#bar)">
+    <rect x="166" y="440" width="60" height="26" fill="#002b7f"/>
+    <rect x="226" y="440" width="60" height="26" fill="#fcd116"/>
+    <rect x="286" y="440" width="60" height="26" fill="#ce1126"/>
+  </g>
+</svg>
