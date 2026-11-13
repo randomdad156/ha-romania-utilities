@@ -9,6 +9,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, PROVIDER_EON, PROVIDER_NAMES
 from .coordinator import UtilitiesCoordinator
+from .parsers import EON_UTILITY_TYPES
 
 
 class UtilitiesEntity(CoordinatorEntity[UtilitiesCoordinator]):
@@ -22,12 +23,17 @@ class UtilitiesEntity(CoordinatorEntity[UtilitiesCoordinator]):
         self._attr_unique_id = f"{coordinator.provider}_{self.contract_id}_{key}"
         self._attr_translation_key = key
         provider_name = PROVIDER_NAMES[coordinator.provider]
-        name = contract.get("name") or f"{provider_name} {self.contract_id}"
+        # Entries created by 0.1.0 stored E·ON's raw utilityType code ("02").
+        kind = EON_UTILITY_TYPES.get(str(contract.get("kind")), contract.get("kind"))
+        if coordinator.provider == PROVIDER_EON:
+            name = " ".join(p for p in ("E·ON", kind, self.contract_id) if p)
+        else:
+            name = contract.get("name") or f"{provider_name} {self.contract_id}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.provider}_{self.contract_id}")},
             name=name,
             manufacturer=provider_name,
-            model=contract.get("kind") or ("Contract" if coordinator.provider == PROVIDER_EON else "Cont"),
+            model=contract.get("product") or kind or "Contract",
             serial_number=self.contract_id,
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://www.eon.ro/myline" if coordinator.provider == PROVIDER_EON

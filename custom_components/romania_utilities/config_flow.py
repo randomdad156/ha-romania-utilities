@@ -7,8 +7,10 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -33,7 +35,7 @@ from .const import (
 )
 from .eon_api import EonAuthError, EonClient, EonError, EonMfaRequired
 from .hidro_api import HidroAuthError, HidroClient, HidroError
-from .parsers import eon_contract_label, eon_flatten_contracts, first, hidro_accounts
+from .parsers import eon_contract_options, hidro_contract_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +46,11 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return ContractsOptionsFlow()
 
     def __init__(self) -> None:
         self._provider: str | None = None
@@ -108,18 +115,7 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self._after_login()
             client = HidroClient(session, self._username, self._password)
             await client.login()
-            accounts = hidro_accounts(await client.get_user_setting())
-            self._available = {
-                acc["uan"]: {
-                    **acc,
-                    "id": acc["uan"],
-                    "name": f"Hidroelectrica {acc['account_number'] or acc['uan']}",
-                    "label": " · ".join(
-                        p for p in (acc["uan"], acc["account_number"], acc["address"]) if p
-                    ),
-                }
-                for acc in accounts
-            }
+            self._available = hidro_contract_options(await client.get_user_setting())
             return await self._after_contracts_known()
         except (EonAuthError, HidroAuthError):
             errors["base"] = "invalid_auth"
@@ -151,25 +147,10 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
             return self._finish_reauth()
         assert self._eon is not None
         try:
-            items = eon_flatten_contracts(await self._eon.get_contracts())
+            self._available = eon_contract_options(await self._eon.get_contracts())
         except EonError as err:
             _LOGGER.warning("Could not list E·ON contracts: %s", err)
             return self.async_abort(reason="cannot_connect")
-        self._available = {}
-        for item in items:
-            number, label = eon_contract_label(item)
-            if not number:
-                continue
-            kind = first(item, "utilityType", "serviceType", "division", "productName")
-            if item.get("_parent"):
-                label = f"{label} (sub-contract of {item['_parent']})"
-            self._available[number] = {
-                "id": number,
-                "name": f"E·ON {number}" + (f" {kind}" if kind else ""),
-                "kind": str(kind) if kind else None,
-                "parent": item.get("_parent"),
-                "label": label,
-            }
         return await self._after_contracts_known()
 
     async def _after_contracts_known(self) -> ConfigFlowResult:
@@ -245,3 +226,65 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
             updates[CONF_TOKENS] = self._eon.tokens
             updates[CONF_MFA_REQUIRED] = self._mfa_required
         return self.async_update_reload_and_abort(entry, data_updates=updates)
+
+
+def _contracts_selector(available: dict[str, dict[str, Any]]) -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[SelectOptionDict(value=k, label=v["label"]) for k, v in available.items()],
+            multiple=True,
+            mode=SelectSelectorMode.LIST,
+        )
+    )
+
+
+class ContractsOptionsFlow(OptionsFlow):
+    """Change which contracts of an existing login are added."""
+
+    def __init__(self) -> None:
+        self._available: dict[str, dict[str, Any]] = {}
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        entry = self.config_entry
+        current = [c["id"] for c in entry.data.get(CONF_CONTRACTS, [])]
+        if user_input is not None and user_input.get(CONF_CONTRACTS):
+            chosen = user_input[CONF_CONTRACTS]
+            known = {c["id"]: c for c in entry.data.get(CONF_CONTRACTS, [])}
+            contracts = [
+                {k: v for k, v in (self._available.get(c) or known[c]).items() if k != "label"}
+                for c in chosen
+                if c in self._available or c in known
+            ]
+            # Drop the devices of contracts that were unselected.
+            registry = dr.async_get(self.hass)
+            provider = entry.data[CONF_PROVIDER]
+            for removed in set(current) - set(chosen):
+                device = registry.async_get_device(identifiers={(DOMAIN, f"{provider}_{removed}")})
+                if device:
+                    registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_CONTRACTS: contracts}
+            )
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            return self.async_create_entry(data={})
+
+        coordinator = entry.runtime_data
+        try:
+            if entry.data[CONF_PROVIDER] == PROVIDER_EON:
+                allow_login = not entry.data.get(CONF_MFA_REQUIRED, False)
+                self._available = eon_contract_options(
+                    await coordinator.client.get_contracts(allow_login=allow_login)
+                )
+            else:
+                self._available = hidro_contract_options(await coordinator.client.get_user_setting())
+        except (EonError, HidroError) as err:
+            _LOGGER.warning("Could not list contracts: %s", err)
+            return self.async_abort(reason="cannot_connect")
+        for contract in entry.data.get(CONF_CONTRACTS, []):
+            self._available.setdefault(contract["id"], {**contract, "label": contract["id"]})
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_CONTRACTS, default=current): _contracts_selector(self._available)}
+            ),
+        )

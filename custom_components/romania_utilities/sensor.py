@@ -127,7 +127,11 @@ async def async_setup_entry(
     for contract in coordinator.contracts:
         values = (coordinator.data or {}).get(contract["id"]) or {}
         for description in SENSORS:
-            if description.only_if_present and values.get(description.value_key) is None:
+            # Prosumer-only sensors: skip when absent, or zero on a non-prosumer.
+            if description.only_if_present and (
+                values.get(description.value_key) is None
+                or (not values.get(description.value_key) and values.get("injected_index") is None)
+            ):
                 continue
             entities.append(UtilitiesSensor(coordinator, contract, description))
     async_add_entities(entities)

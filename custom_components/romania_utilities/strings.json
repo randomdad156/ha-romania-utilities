@@ -11,27 +11,39 @@
       "eon": {
         "title": "E·ON Myline login",
         "description": "Use the same e-mail and password as on eon.ro/myline.",
-        "data": { "username": "E-mail", "password": "Password" }
+        "data": {
+          "username": "E-mail",
+          "password": "Password"
+        }
       },
       "hidroelectrica": {
         "title": "iHidro login",
         "description": "Use the same user name and password as on ihidro.ro.",
-        "data": { "username": "User name", "password": "Password" }
+        "data": {
+          "username": "User name",
+          "password": "Password"
+        }
       },
       "mfa": {
         "title": "Two-factor code",
         "description": "E·ON sent a verification code to {recipient}. Enter it below.",
-        "data": { "code": "Code" }
+        "data": {
+          "code": "Code"
+        }
       },
       "contracts": {
         "title": "Contracts",
         "description": "Select the contracts to add to Home Assistant.",
-        "data": { "contracts": "Contracts" }
+        "data": {
+          "contracts": "Contracts"
+        }
       },
       "reauth_confirm": {
         "title": "Log in again",
         "description": "{provider} rejected the saved login for {username}. Enter the password again.",
-        "data": { "password": "Password" }
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -46,27 +58,75 @@
       "cannot_connect": "Could not reach the provider. Try again later."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Contracts",
+        "description": "Select the contracts to keep in Home Assistant.",
+        "data": {
+          "contracts": "Contracts"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "Could not reach the provider. Try again later."
+    }
+  },
   "entity": {
     "sensor": {
-      "balance": { "name": "Balance due" },
-      "last_invoice_amount": { "name": "Last invoice amount" },
-      "last_invoice_issue_date": { "name": "Last invoice issue date" },
-      "last_invoice_due_date": { "name": "Last invoice due date" },
-      "next_due_date": { "name": "Next due date" },
-      "days_until_due": { "name": "Days until due" },
-      "unpaid_invoices": { "name": "Unpaid invoices" },
-      "consumption_last_month": { "name": "Consumption last month" },
-      "consumption_ytd": { "name": "Consumption this year" },
-      "reading_window_start": { "name": "Meter reading window start" },
-      "reading_window_end": { "name": "Meter reading window end" },
-      "last_index": { "name": "Last meter index" },
-      "injected_index": { "name": "Injected energy index" },
-      "prosumer_balance": { "name": "Prosumer balance" },
-      "compensation_ytd": { "name": "Compensations this year" }
+      "balance": {
+        "name": "Balance due"
+      },
+      "last_invoice_amount": {
+        "name": "Last invoice amount"
+      },
+      "last_invoice_issue_date": {
+        "name": "Last invoice issue date"
+      },
+      "last_invoice_due_date": {
+        "name": "Last invoice due date"
+      },
+      "next_due_date": {
+        "name": "Next due date"
+      },
+      "days_until_due": {
+        "name": "Days until due"
+      },
+      "unpaid_invoices": {
+        "name": "Unpaid invoices"
+      },
+      "consumption_last_month": {
+        "name": "Consumption last month"
+      },
+      "consumption_ytd": {
+        "name": "Consumption this year"
+      },
+      "reading_window_start": {
+        "name": "Meter reading window start"
+      },
+      "reading_window_end": {
+        "name": "Meter reading window end"
+      },
+      "last_index": {
+        "name": "Last meter index"
+      },
+      "injected_index": {
+        "name": "Injected energy index"
+      },
+      "prosumer_balance": {
+        "name": "Prosumer balance"
+      },
+      "compensation_ytd": {
+        "name": "Compensations this year"
+      }
     },
     "binary_sensor": {
-      "reading_window_open": { "name": "Meter reading window open" },
-      "invoice_overdue": { "name": "Invoice overdue" }
+      "reading_window_open": {
+        "name": "Meter reading window open"
+      },
+      "invoice_overdue": {
+        "name": "Invoice overdue"
+      }
     }
   }
 }

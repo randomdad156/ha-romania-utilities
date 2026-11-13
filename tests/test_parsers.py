@@ -39,7 +39,7 @@ def test_to_date_formats():
 # ── E·ON ──
 
 EON_RAW = {
-    "contract": {"accountContract": "002100000002", "utilityType": "Gaz"},
+    "contract": {"accountContract": "002100000002", "utilityType": "02"},
     "dashboard": {"balance": {"balance": "245,30"}},
     "unpaid": {
         "list": [
@@ -115,8 +115,8 @@ def test_eon_flatten_collective_contract():
     items = [
         {"contractDetails": {"accountContract": "009900000001"},
          "subContracts": [
-             {"contractDetails": {"accountContract": "002100000002", "utilityType": "Gaz"}},
-             {"contractDetails": {"accountContract": "002200000003", "utilityType": "Electricitate"}},
+             {"contractDetails": {"accountContract": "002100000002", "utilityType": "02"}},
+             {"contractDetails": {"accountContract": "002200000003", "utilityType": "01"}},
          ]},
         {"accountContract": "002100000004"},
     ]
@@ -200,3 +200,40 @@ def test_empty_responses_never_raise():
     out = p.parse_hidro_account({}, TODAY)
     assert out["consumption_unit"] == "kWh"
     assert out["balance"] is None
+
+
+def test_eon_kind_and_unit_codes():
+    assert p.eon_kind({"utilityType": "01"}) == "Electricity"
+    assert p.eon_kind({"utilityType": "02"}) == "Gas"
+    assert p.eon_kind({"utilityType": "00"}) == "Duo"
+    assert p.eon_unit({"utilityType": "01"}, {"um": "KWH"}) == "kWh"
+    assert p.eon_unit({"utilityType": "01"}, {"um": "M3"}) == "m³"
+    assert p.eon_unit({"utilityType": "02"}, None) == "m³"
+    assert p.eon_unit({"utilityType": "01"}, None) == "kWh"
+
+
+def test_eon_contract_options_names():
+    items = [{"contractDetails": {"accountContract": "009900000001", "utilityType": "00"},
+              "subContracts": [{"contractDetails": {"accountContract": "002200000003",
+                                                    "utilityType": "01", "productName": "Duo"}}]}]
+    opts = p.eon_contract_options(items)
+    assert opts["002200000003"]["name"] == "E·ON Electricity 002200000003"
+    assert opts["002200000003"]["parent"] == "009900000001"
+    assert "sub-contract of 009900000001" in opts["002200000003"]["label"]
+    assert opts["009900000001"]["kind"] == "Duo"
+
+
+def test_hidro_last_invoice_from_history_when_paid():
+    raw = {**HIDRO_RAW,
+           "bill": {"result": {"billamount": "0,00", "rembalance": "0,00", "duedate": "20261113"}},
+           "billing_history": {"result": {"objBillingHistoryEntity": [
+               {"amount": "150,20", "invoiceDate": "2026-09-14", "dueDate": "2026-09-29", "invoiceId": "A"},
+               {"amount": "180,75", "invoiceDate": "2026-10-14", "dueDate": "2026-10-29", "invoiceId": "B"},
+           ], "objBillingPaymentHistoryEntity": None}}}
+    out = p.parse_hidro_account(raw, TODAY)
+    assert out["last_invoice_amount"] == 180.75
+    assert out["last_invoice_issue_date"] == date(2026, 10, 14)
+    assert out["last_invoice_due_date"] == date(2026, 10, 29)
+    assert out["last_invoice_number"] == "B"
+    assert out["last_invoice_paid"] is True
+    assert out["unpaid_invoices"] == 0

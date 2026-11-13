@@ -45,6 +45,18 @@ TO_REDACT = {
     "bp_number",
     "BpNumber",
     "partnerCode",
+    "fiscalNumber",
+    "phoneNumber",
+    "mailingAddress",
+    "companyCode",
+    "contractUuid",
+    "consumptionPointCode",
+    "pod",
+    "Pod",
+    "podValue",
+    "label",
+    "prosumId",
+    "cb",
 }
 
 

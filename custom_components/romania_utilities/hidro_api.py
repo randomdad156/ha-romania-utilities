@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
@@ -167,12 +167,17 @@ class HidroClient:
                 _LOGGER.debug("iHidro %s: %s", uan, err)
                 return None
 
+        # The billing history is empty unless a date range is given (YYYY-MM-DD).
+        to_day = datetime.now().date()
+        from_day = to_day - timedelta(days=730)
+
         bill, window, pods, billing = await asyncio.gather(
             safe(self._call(EP_BILL, lambda: {**base(), "LanguageCode": LANGUAGE, "IsBillPDF": "0"})),
             safe(self._call(EP_WINDOW_DATES, lambda: {**base(), "MeterType": "E"})),
             safe(self._call(EP_PODS, lambda: {**base(), "MeterType": "E"})),
             safe(self._call(EP_BILLING_HISTORY, lambda: {
-                **base(), "LanguageCode": LANGUAGE, "FromDate": "", "ToDate": "",
+                **base(), "LanguageCode": LANGUAGE,
+                "FromDate": from_day.isoformat(), "ToDate": to_day.isoformat(),
             })),
         )
 

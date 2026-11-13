@@ -222,17 +222,30 @@ def _register_value(register: dict | None) -> float | None:
     return to_float(first(register, "currentValue", "oldSelfIndexValue", "value", "oldValue"))
 
 
+EON_UTILITY_TYPES = {"00": "Duo", "01": "Electricity", "02": "Gas"}
+
+
+def eon_kind(item: Any) -> str | None:
+    """Readable utility of a contract: utilityType 01 electricity, 02 gas, 00 collective."""
+    code = str(first(item, "utilityType") or "").strip()
+    if code in EON_UTILITY_TYPES:
+        return EON_UTILITY_TYPES[code]
+    return str(first(item, "serviceType", "division") or "") or None
+
+
 def eon_unit(contract_info: Any, graphic: Any) -> str:
     unit = str(first(graphic, "unit", "measureUnit", "um") or "").lower()
     if unit in ("mc", "m3", "m³"):
         return "m³"
     if unit == "kwh":
         return "kWh"
+    if eon_kind(contract_info) == "Gas":
+        return "m³"
     text = " ".join(
         str(first(contract_info, key) or "")
-        for key in ("utilityType", "serviceType", "division", "productName", "contractName", "type")
+        for key in ("serviceType", "division", "productName", "contractName")
     ).lower()
-    return "m³" if ("gaz" in text or "gas" in text) and "kwh" not in unit else "kWh"
+    return "m³" if "gaz" in text or "gas" in text else "kWh"
 
 
 def parse_eon_contract(raw: dict[str, Any], today: date) -> dict[str, Any]:
@@ -315,7 +328,7 @@ def parse_eon_contract(raw: dict[str, Any], today: date) -> dict[str, Any]:
 def eon_contract_label(item: dict) -> tuple[str, str]:
     """(account contract, human label) for the contract selection list."""
     number = str(first(item, "accountContract", "contractAccount", "accountContractNumber") or "")
-    kind = first(item, "utilityType", "serviceType", "division", "productName", "contractName")
+    kind = eon_kind(item) or first(item, "productName")
     address = item.get("consumptionPointAddress") or item.get("address")
     if isinstance(address, dict):
         address = ", ".join(
@@ -348,6 +361,27 @@ def eon_flatten_contracts(items: list[dict]) -> list[dict]:
     for item in items:
         add(item, None)
     return flat
+
+
+def eon_contract_options(items: list[dict]) -> dict[str, dict[str, Any]]:
+    """Selectable contracts: id -> stored contract dict (+ ``label`` for the UI)."""
+    options: dict[str, dict[str, Any]] = {}
+    for item in eon_flatten_contracts(items):
+        number, label = eon_contract_label(item)
+        if not number:
+            continue
+        kind = eon_kind(item)
+        if item.get("_parent"):
+            label = f"{label} (sub-contract of {item['_parent']})"
+        options[number] = {
+            "id": number,
+            "name": " ".join(p for p in ("E·ON", kind, number) if p),
+            "kind": kind,
+            "product": first(item, "productName"),
+            "parent": item.get("_parent"),
+            "label": label,
+        }
+    return options
 
 
 # ── Hidroelectrica ───────────────────────────────────────────────────────────
@@ -394,6 +428,20 @@ def hidro_accounts(user_setting: Any) -> list[dict[str, str]]:
                 }
             )
     return accounts
+
+
+def hidro_contract_options(user_setting: Any) -> dict[str, dict[str, Any]]:
+    """Selectable iHidro accounts: UAN -> stored account dict (+ ``label``)."""
+    return {
+        acc["uan"]: {
+            **acc,
+            "id": acc["uan"],
+            "name": f"Hidroelectrica {acc['account_number'] or acc['uan']}",
+            "kind": "Electricity",
+            "label": " · ".join(p for p in (acc["uan"], acc["account_number"], acc["address"]) if p),
+        }
+        for acc in hidro_accounts(user_setting)
+    }
 
 
 def hidro_readings(history: Any, register: str = REG_CONSUMPTION) -> list[tuple[date, float, dict]]:
@@ -448,16 +496,26 @@ def parse_hidro_account(raw: dict[str, Any], today: date) -> dict[str, Any]:
             first(bill, "billdate", "invoicedate", "issuedate", "BillDate")
         )
 
-    # Invoice list from the billing history, when the account has one.
+    # GetBill only describes the invoice still to pay (amount 0 once paid), so
+    # the last invoice comes from the billing history when there is one.
     history_result = hidro_result(raw.get("billing_history"))
     invoices = as_list(history_result.get("objBillingHistoryEntity"))
     if invoices:
         def inv_date(item: dict) -> date:
-            return to_date(first(item, "billDate", "BillDate", "invoiceDate", "billdate")) or date.min
+            return to_date(first(item, "invoiceDate", "billDate", "BillDate", "billdate")) or date.min
 
         newest = max(invoices, key=inv_date)
-        if out["last_invoice_issue_date"] is None and inv_date(newest) != date.min:
+        if inv_date(newest) != date.min:
             out["last_invoice_issue_date"] = inv_date(newest)
+            amount = to_float(first(newest, "amount", "invoiceAmount", "billamount"))
+            if amount is not None:
+                out["last_invoice_amount"] = amount
+            out["last_invoice_due_date"] = (
+                to_date(first(newest, "dueDate", "duedate")) or out["last_invoice_due_date"]
+            )
+            number = first(newest, "invoiceId", "invoiceNumber", "exbel")
+            if number:
+                out["last_invoice_number"] = str(number)
 
     if out["balance"] is not None:
         unpaid = out["balance"] > 0.009
