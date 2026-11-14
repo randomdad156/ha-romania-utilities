@@ -1,5 +1,7 @@
 # Romania Utilities for Home Assistant
 
+[![Donate with Revolut](https://img.shields.io/badge/Donate-Revolut-0666EB?logo=revolut&logoColor=white)](https://revolut.me/adrianz9m)
+
 Bills, consumption and meter-reading data from **E·ON România** (gas and
 electricity, Myline), **Hidroelectrica** (electricity, iHidro) and **e-bloc.ro**
 (owners' association maintenance fees and water meters), as Home Assistant
@@ -82,6 +84,14 @@ and addresses redacted. Attach it to bug reports.
 pip install pytest
 pytest -q
 ```
+
+## Support
+
+The integration is free and open source. If it saves you time and you want
+to say thanks, you can buy me a coffee via
+[Revolut](https://revolut.me/adrianz9m). Completely optional.
+
+[![Donate with Revolut](https://img.shields.io/badge/Donate-Revolut-0666EB?logo=revolut&logoColor=white)](https://revolut.me/adrianz9m)
 
 ## Licence
 
