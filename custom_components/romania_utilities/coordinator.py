@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
 from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import (
     async_create_clientsession,
     async_get_clientsession,
 )
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -75,9 +77,47 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         self.contracts: list[dict[str, Any]] = entry.data.get(CONF_CONTRACTS, [])
         self.raw: dict[str, Any] = {}
+        # Set on the first rejected login. From then on nothing contacts the
+        # provider again (no repeated logins with a rejected password) until the
+        # user re-authenticates, which reloads the entry with a new coordinator.
+        self.auth_failed = False
+        self._keepalive_unsub: Callable[[], None] | None = None
+
+    def _auth_failure(self, err: Exception) -> None:
+        """Handle a rejected login exactly once: event, re-auth, stop keep-alive."""
+        if self.auth_failed:
+            return
+        self.auth_failed = True
+        self.async_stop_keepalive()
+        _LOGGER.warning("%s rejected the saved login: %s", self.config_entry.title, err)
+        self.hass.bus.async_fire(
+            EVENT_AUTH_FAILED,
+            {
+                "entry_id": self.config_entry.entry_id,
+                "provider": self.provider,
+                "title": self.config_entry.title,
+                "reason": str(err),
+            },
+        )
+
+    @callback
+    def async_start_keepalive(self) -> Callable[[], None]:
+        """E·ON: renew the session every few minutes. Returns the stop callback."""
+        self._keepalive_unsub = async_track_time_interval(
+            self.hass, self.async_keepalive, KEEPALIVE_INTERVAL
+        )
+        return self.async_stop_keepalive
+
+    @callback
+    def async_stop_keepalive(self) -> None:
+        if self._keepalive_unsub is not None:
+            self._keepalive_unsub()
+            self._keepalive_unsub = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         today = dt_util.now().date()
+        if self.auth_failed:
+            raise ConfigEntryAuthFailed("Waiting for re-authentication")
         try:
             if self.provider == PROVIDER_EON:
                 data = await self._update_eon(today)
@@ -86,15 +126,7 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 data = await self._update_hidro(today)
         except (EonAuthError, HidroAuthError, EblocAuthError) as err:
-            self.hass.bus.async_fire(
-                EVENT_AUTH_FAILED,
-                {
-                    "entry_id": self.config_entry.entry_id,
-                    "provider": self.provider,
-                    "title": self.config_entry.title,
-                    "reason": str(err),
-                },
-            )
+            self._auth_failure(err)
             raise ConfigEntryAuthFailed(str(err)) from err
         except (EonError, HidroError, EblocError) as err:
             raise UpdateFailed(str(err)) from err
@@ -143,7 +175,7 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hours, so without this the token would always be expired by the next
         poll and a 2FA account would need a new code every time.
         """
-        if self.provider != PROVIDER_EON:
+        if self.provider != PROVIDER_EON or self.auth_failed:
             return
         client: EonClient = self.client  # type: ignore[assignment]
         if client.seconds_left > KEEPALIVE_MARGIN:
@@ -153,16 +185,7 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 allow_login=not self.config_entry.data.get(CONF_MFA_REQUIRED, False)
             )
         except EonAuthError as err:
-            _LOGGER.warning("E·ON session could not be renewed: %s", err)
-            self.hass.bus.async_fire(
-                EVENT_AUTH_FAILED,
-                {
-                    "entry_id": self.config_entry.entry_id,
-                    "provider": self.provider,
-                    "title": self.config_entry.title,
-                    "reason": str(err),
-                },
-            )
+            self._auth_failure(err)
             self.config_entry.async_start_reauth(self.hass)
             return
         except EonError as err:
