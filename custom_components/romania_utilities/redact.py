@@ -83,6 +83,22 @@ TO_REDACT = {
     "serialNumber",
     "SerialNumber",
     "ablbelnr",
+    # iHidro (SmartCMobile) account, POD and meter identifiers
+    "contractAccountID",
+    "accountID",
+    "POD",
+    "CounterSeries",
+    "deviceNumber",
+    "equipmentNo",
+    "registerNo",
+    "distCustomer",
+    "distCustomerId",
+    "distContract",
+    "exbel",
+    # e-bloc apartment and meter identifiers
+    "ap",
+    "id_contor",
+    "guid",
 }
 
 

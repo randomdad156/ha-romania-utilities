@@ -36,7 +36,9 @@ def test_non_dict_passthrough():
 def test_identifier_fields_are_redacted():
     for key in ("id", "uan", "account_number", "id_ap", "asoc", "cod_client", "bp_number", "pod",
                 "accountContract", "UtilityAccountNumber", "AccountNumber", "invoiceNumber",
-                "password", "username", "tokens", "fiscalNumber", "phoneNumber"):
+                "password", "username", "tokens", "fiscalNumber", "phoneNumber",
+                "contractAccountID", "accountID", "POD", "CounterSeries", "deviceNumber",
+                "ap", "id_contor", "guid"):
         assert key in r.TO_REDACT, key
 
 
