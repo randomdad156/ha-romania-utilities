@@ -18,6 +18,8 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
+from .session import jwt_expiry
+
 _LOGGER = logging.getLogger(__name__)
 
 API_BASE = "https://api2.eon.ro"
@@ -42,6 +44,7 @@ URL_METER_INDEX = f"{API_BASE}/meterreadings/v1/meter-reading/{{contract}}/index
 MFA_REQUIRED_CODE = "6054"
 REFRESH_MARGIN = 900  # refresh 15 minutes before expiry (keep-alive runs every 5)
 DEFAULT_LIFETIME = 1800
+MIN_USABLE = 60  # a token with less than this left is treated as expired
 
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -94,7 +97,7 @@ class EonClient:
         if tokens:
             self._access = tokens.get("access_token")
             self._refresh = tokens.get("refresh_token")
-            self._expires_at = float(tokens.get("expires_at") or 0)
+            self._expires_at = jwt_expiry(self._access) or float(tokens.get("expires_at") or 0)
 
     # ── tokens ──
 
@@ -117,7 +120,8 @@ class EonClient:
             lifetime = int(lifetime)
         except (TypeError, ValueError):
             lifetime = DEFAULT_LIFETIME
-        self._expires_at = time.time() + lifetime
+        # The token's own expiry wins over the reply's lifetime field.
+        self._expires_at = jwt_expiry(access) or time.time() + lifetime
 
     async def _post_json(self, url: str, payload: dict) -> tuple[int, Any]:
         try:
@@ -182,7 +186,7 @@ class EonClient:
             attempts.append({"refreshToken": self._refresh})
         if not attempts:
             raise EonAuthError("No session to refresh")
-        last_status = 0
+        rejected = []
         for payload in attempts:
             status, data = await self._post_json(URL_REFRESH, payload)
             if status == 200 and isinstance(data, dict):
@@ -190,8 +194,9 @@ class EonClient:
                 return
             if status not in (400, 401, 403):
                 raise EonError(f"Session refresh failed (HTTP {status})")
-            last_status = status
-        raise EonAuthError(f"Session refresh rejected (HTTP {last_status})")
+            code = str(data.get("code") or "-") if isinstance(data, dict) else "-"
+            rejected.append(f"{next(iter(payload))}: HTTP {status} code {code}")
+        raise EonAuthError(f"Session refresh rejected ({'; '.join(rejected)})")
 
     async def ensure_session(self, allow_login: bool) -> None:
         """Make sure a usable access token exists.
@@ -206,8 +211,13 @@ class EonClient:
                 try:
                     await self.refresh()
                     return
-                except EonAuthError:
-                    _LOGGER.debug("E·ON refresh rejected, session expired")
+                except EonAuthError as err:
+                    if self.seconds_left > MIN_USABLE:
+                        # Keep using the still-valid token; the keep-alive
+                        # retries the refresh in a few minutes.
+                        _LOGGER.warning("E·ON refresh rejected, token still valid: %s", err)
+                        return
+                    _LOGGER.warning("E·ON session could not be renewed: %s", err)
             if not allow_login:
                 raise EonAuthError("Session expired and the account uses two-factor login")
             try:

@@ -9,8 +9,8 @@ from typing import Any
 
 from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import (
     async_create_clientsession,
@@ -82,6 +82,7 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # user re-authenticates, which reloads the entry with a new coordinator.
         self.auth_failed = False
         self._keepalive_unsub: Callable[[], None] | None = None
+        self._stop_listener: Callable[[], None] | None = None
 
     def _auth_failure(self, err: Exception) -> None:
         """Handle a rejected login exactly once: event, re-auth, stop keep-alive."""
@@ -102,11 +103,32 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def async_start_keepalive(self) -> Callable[[], None]:
-        """E·ON: renew the session every few minutes. Returns the stop callback."""
+        """E·ON: renew the session every few minutes. Returns the stop callback.
+
+        It stops when Home Assistant shuts down: a renewal that finishes after
+        the final state write would leave the old, already replaced session on
+        disk, and the next start would find it rejected.
+        """
         self._keepalive_unsub = async_track_time_interval(
             self.hass, self.async_keepalive, KEEPALIVE_INTERVAL
         )
-        return self.async_stop_keepalive
+        self._stop_listener = self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP, self._async_on_stop
+        )
+
+        @callback
+        def _stop() -> None:
+            self.async_stop_keepalive()
+            if self._stop_listener is not None:
+                self._stop_listener()
+                self._stop_listener = None
+
+        return _stop
+
+    @callback
+    def _async_on_stop(self, _event: Event) -> None:
+        self._stop_listener = None  # a once-listener removes itself
+        self.async_stop_keepalive()
 
     @callback
     def async_stop_keepalive(self) -> None:
@@ -175,7 +197,11 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hours, so without this the token would always be expired by the next
         poll and a 2FA account would need a new code every time.
         """
-        if self.provider != PROVIDER_EON or self.auth_failed:
+        if (
+            self.provider != PROVIDER_EON
+            or self.auth_failed
+            or self.hass.state is not CoreState.running
+        ):
             return
         client: EonClient = self.client  # type: ignore[assignment]
         if client.seconds_left > KEEPALIVE_MARGIN:
