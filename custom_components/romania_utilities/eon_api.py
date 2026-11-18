@@ -18,7 +18,7 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
-from .session import jwt_expiry
+from .session import export_cookies, import_cookies, jwt_expiry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,6 +98,7 @@ class EonClient:
             self._access = tokens.get("access_token")
             self._refresh = tokens.get("refresh_token")
             self._expires_at = jwt_expiry(self._access) or float(tokens.get("expires_at") or 0)
+            import_cookies(session.cookie_jar, tokens.get("cookies"))
 
     # ── tokens ──
 
@@ -107,6 +108,7 @@ class EonClient:
             "access_token": self._access,
             "refresh_token": self._refresh,
             "expires_at": self._expires_at,
+            "cookies": export_cookies(self._session.cookie_jar),
         }
 
     def _apply(self, data: dict[str, Any]) -> None:

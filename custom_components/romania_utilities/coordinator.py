@@ -58,8 +58,10 @@ class UtilitiesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.data[CONF_PROVIDER]
         session = async_get_clientsession(hass)
         if self.provider == PROVIDER_EON:
+            # Own cookie jar: renewing the session needs E·ON's cookies, which are
+            # saved with the tokens so a restart can still renew it.
             self.client: EonClient | HidroClient | EblocClient = EonClient(
-                session,
+                async_create_clientsession(hass, cookie_jar=CookieJar()),
                 entry.data[CONF_USERNAME],
                 entry.data[CONF_PASSWORD],
                 entry.data.get(CONF_TOKENS),

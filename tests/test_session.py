@@ -35,3 +35,33 @@ def test_not_a_jwt_or_no_exp() -> None:
     assert s.jwt_expiry("a.b.c") is None
     assert s.jwt_expiry(_jwt({"sub": "x"})) is None
     assert s.jwt_expiry(_jwt({"exp": "soon"})) is None
+
+
+def test_cookie_export_and_import_roundtrip() -> None:
+    from http.cookies import SimpleCookie
+
+    jar_in = SimpleCookie()
+    jar_in["sid"] = "abc"
+    jar_in["sid"]["domain"] = ".api.example.test"
+    jar_in["sid"]["path"] = "/users"
+    jar_in["sid"]["secure"] = True
+    saved = s.export_cookies(jar_in.values())
+    assert saved == [
+        {"name": "sid", "value": "abc", "domain": "api.example.test", "path": "/users", "secure": True}
+    ]
+
+    class FakeJar:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def update_cookies(self, cookie, response_url=None) -> None:
+            self.calls.append((dict(cookie), str(response_url)))
+
+    import pytest
+
+    pytest.importorskip("yarl")
+    jar = FakeJar()
+    assert s.import_cookies(jar, saved) == 1
+    assert jar.calls[0][1] == "https://api.example.test/users"
+    assert s.import_cookies(jar, None) == 0
+    assert s.import_cookies(jar, [{"value": "x"}]) == 0

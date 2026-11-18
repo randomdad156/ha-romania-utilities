@@ -117,7 +117,12 @@ class RomaniaUtilitiesConfigFlow(ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
         try:
             if self._provider == PROVIDER_EON:
-                self._eon = EonClient(session, self._username, self._password)
+                # Own cookie jar: E·ON's session cookies are saved with the tokens.
+                self._eon = EonClient(
+                    async_create_clientsession(self.hass, cookie_jar=CookieJar()),
+                    self._username,
+                    self._password,
+                )
                 try:
                     await self._eon.login()
                 except EonMfaRequired as mfa:
