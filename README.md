@@ -13,16 +13,17 @@ it until it is updated.
 
 ## Installation (HACS)
 
-1. HACS → ⋮ → **Custom repositories** → add
-   `https://github.com/randomdad156/ha-romania-utilities`, category **Integration**.
-2. Download **Romania Utilities**, then restart Home Assistant.
-3. **Settings → Devices & services → Add integration → Romania Utilities**.
-4. Choose the provider, log in, and pick the contracts to add. Repeat for the
-   other provider.
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=randomdad156&repository=ha-romania-utilities&category=integration)
+
+1. In HACS, search for **Romania Utilities** and download it (or use the
+   button above), then restart Home Assistant.
+2. **Settings → Devices & services → Add integration → Romania Utilities**.
+3. Choose the provider, log in, and pick the contracts to add. Repeat for the
+   other providers.
 
 E·ON accounts with two-factor login get an extra step for the code that E·ON
-sends by e-mail/SMS. The session is then kept alive with refresh tokens; if it
-ever expires, Home Assistant asks you to log in again (no background logins
+sends by e-mail/SMS. The session is then kept alive, also across restarts; if
+it ever expires, Home Assistant asks you to log in again (no background logins
 that would send you unwanted codes).
 
 ## Entities (per contract)
